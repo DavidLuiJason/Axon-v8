@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Structural App-Shell Foundation: Lock document viewport so window never scrolls */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  position: fixed;
+  inset: 0;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
