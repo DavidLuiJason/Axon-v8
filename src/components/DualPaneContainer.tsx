@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { ChatPane } from './ChatPane';
 import { WorkspacePane } from './WorkspacePane';
@@ -7,50 +7,11 @@ export const DualPaneContainer: React.FC = () => {
   const {
     paneViewState,
     setPaneViewState,
-    splitRatio,
-    setSplitRatio,
     openMenu,
-    drawerGestureOffset,
     setDrawerGestureOffset,
   } = useApp();
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const isDraggingRef = useRef(false);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Desktop splitter drag
-  const handlePointerMove = useCallback(
-    (clientX: number) => {
-      if (!isDraggingRef.current || !containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const relativeX = clientX - rect.left;
-      const percentage = Math.max(15, Math.min(85, (relativeX / rect.width) * 100));
-      setSplitRatio(percentage);
-    },
-    [setSplitRatio]
-  );
-
-  useEffect(() => {
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isDraggingRef.current) return;
-      handlePointerMove(e.clientX);
-    };
-
-    const onMouseUp = () => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        setIsDragging(false);
-      }
-    };
-
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-
-    return () => {
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-    };
-  }, [handlePointerMove]);
 
   // Real-time gesture swipe tracking between Chat and Workspace (iOS/ChatGPT style)
   const [dragOffset, setDragOffset] = useState(0);
@@ -59,17 +20,21 @@ export const DualPaneContainer: React.FC = () => {
   const touchStartYRef = useRef<number | null>(null);
   const touchStartTimeRef = useRef<number>(0);
   const gestureLockRef = useRef<'horizontal' | 'vertical' | null>(null);
+  const isMouseActiveRef = useRef<boolean>(false);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (paneViewState === 'split') return;
-
-    // Do not intercept touches on form controls, buttons, input bar, or shortcut menus
-    const target = e.target as HTMLElement | null;
-    if (
-      target?.closest(
-        'input, textarea, select, button, [contenteditable="true"], .no-swipe-gesture, #chat-input-bar, #chat-bottom-shortcut-bar, #edit-shortcuts-modal, [data-no-swipe]'
+  // Exclude interactive elements from triggering swipe navigation
+  const isIgnoredTarget = (target: HTMLElement | null): boolean => {
+    if (!target) return false;
+    return Boolean(
+      target.closest(
+        'input, textarea, select, button, [contenteditable="true"], .no-swipe-gesture, #chat-input-bar, #chat-bottom-dock, #chat-bottom-shortcut-bar, #edit-shortcuts-modal, [data-no-swipe], pre, code'
       )
-    ) {
+    );
+  };
+
+  // Touch handlers (Mobile / Touchscreens)
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isIgnoredTarget(e.target as HTMLElement | null)) {
       touchStartXRef.current = null;
       touchStartYRef.current = null;
       gestureLockRef.current = null;
@@ -86,11 +51,7 @@ export const DualPaneContainer: React.FC = () => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (
-      paneViewState === 'split' ||
-      touchStartXRef.current === null ||
-      touchStartYRef.current === null
-    ) {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) {
       return;
     }
 
@@ -99,6 +60,7 @@ export const DualPaneContainer: React.FC = () => {
     const diffX = currentX - touchStartXRef.current;
     const diffY = currentY - touchStartYRef.current;
 
+    // Lock direction on first significant movement
     if (gestureLockRef.current === null) {
       if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 8) {
         gestureLockRef.current = 'vertical';
@@ -115,28 +77,28 @@ export const DualPaneContainer: React.FC = () => {
 
       if (isChat) {
         if (diffX <= 0) {
-          // Dragging left moves towards workspace
+          // Dragging left moves towards workspace in real time
           setDragOffset(diffX);
           setDrawerGestureOffset(null);
         } else {
-          // Dragging right from ANYWHERE in chat pane opens navigation drawer with real-time tracking
+          // Dragging right from chat pane opens navigation drawer with real-time tracking
           setDragOffset(0);
           setDrawerGestureOffset(diffX);
         }
       } else {
-        // Workspace view: dragging right moves towards chat
+        // Workspace view: dragging right moves towards chat in real time
         setDrawerGestureOffset(null);
         if (diffX >= 0) {
           setDragOffset(diffX);
         } else {
-          setDragOffset(diffX * 0.15); // damping
+          setDragOffset(diffX * 0.18); // Rubber-band resistance on rightmost boundary
         }
       }
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (paneViewState === 'split' || touchStartXRef.current === null) {
+    if (touchStartXRef.current === null) {
       setDragOffset(0);
       setDrawerGestureOffset(null);
       setIsGesturing(false);
@@ -144,13 +106,13 @@ export const DualPaneContainer: React.FC = () => {
     }
 
     const containerWidth = containerRef.current?.clientWidth || window.innerWidth || 400;
+    const halfwayThreshold = containerWidth * 0.5; // Halfway threshold (50%)
     const currentX = e.changedTouches[0].clientX;
     const diffX = currentX - touchStartXRef.current;
-    const dt = Date.now() - touchStartTimeRef.current;
-    const velocity = diffX / Math.max(1, dt);
+    const dt = Math.max(1, Date.now() - touchStartTimeRef.current);
+    const velocity = diffX / dt;
 
     if (gestureLockRef.current === 'horizontal') {
-      const threshold = containerWidth * 0.22;
       const isChat = paneViewState === 'chat-only';
 
       if (isChat) {
@@ -161,14 +123,20 @@ export const DualPaneContainer: React.FC = () => {
           } else {
             setDrawerGestureOffset(null);
           }
-        } else if (diffX < -threshold || (velocity < -0.35 && diffX < -30)) {
-          // Past threshold -> completes to workspace
-          setPaneViewState('workspace-only');
+        } else if (diffX < 0) {
+          // Dragging left towards workspace:
+          // Completes transition if dragged past halfway threshold OR fast flick past 40px; otherwise springs back
+          if (-diffX >= halfwayThreshold || (velocity < -0.4 && diffX < -40)) {
+            setPaneViewState('workspace-only');
+          }
         }
       } else {
-        // In workspace view: dragging right past threshold completes to chat
-        if (diffX > threshold || (velocity > 0.35 && diffX > 30)) {
-          setPaneViewState('chat-only');
+        // In workspace view: dragging right towards chat:
+        // Completes transition if dragged past halfway threshold OR fast flick past 40px; otherwise springs back
+        if (diffX > 0) {
+          if (diffX >= halfwayThreshold || (velocity > 0.4 && diffX > 40)) {
+            setPaneViewState('chat-only');
+          }
         }
       }
     }
@@ -190,22 +158,126 @@ export const DualPaneContainer: React.FC = () => {
     gestureLockRef.current = null;
   };
 
-  const isSplitMode = paneViewState === 'split';
+  // Mouse drag support for desktop/pointer
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    if (isIgnoredTarget(e.target as HTMLElement | null)) return;
 
-  // Calculate track transform
-  let transformStyle = 'none';
-  let transitionStyle = isGesturing ? 'none' : 'transform 0.28s cubic-bezier(0.25, 1, 0.5, 1)';
+    touchStartXRef.current = e.clientX;
+    touchStartYRef.current = e.clientY;
+    touchStartTimeRef.current = Date.now();
+    gestureLockRef.current = null;
+    isMouseActiveRef.current = true;
+    setIsGesturing(false);
+  };
 
-  if (!isSplitMode) {
-    if (paneViewState === 'chat-only') {
-      transformStyle = dragOffset !== 0 ? `translate3d(${dragOffset}px, 0, 0)` : 'translate3d(0%, 0, 0)';
-    } else {
-      // workspace-only: base position is -50%
-      transformStyle =
-        dragOffset !== 0
-          ? `translate3d(calc(-50% + ${dragOffset}px), 0, 0)`
-          : 'translate3d(-50%, 0, 0)';
-    }
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isMouseActiveRef.current || touchStartXRef.current === null || touchStartYRef.current === null) return;
+
+      const diffX = e.clientX - touchStartXRef.current;
+      const diffY = e.clientY - touchStartYRef.current;
+
+      if (gestureLockRef.current === null) {
+        if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 8) {
+          gestureLockRef.current = 'vertical';
+          return;
+        }
+        if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 8) {
+          gestureLockRef.current = 'horizontal';
+          setIsGesturing(true);
+        }
+      }
+
+      if (gestureLockRef.current === 'horizontal') {
+        const isChat = paneViewState === 'chat-only';
+
+        if (isChat) {
+          if (diffX <= 0) {
+            setDragOffset(diffX);
+            setDrawerGestureOffset(null);
+          } else {
+            setDragOffset(0);
+            setDrawerGestureOffset(diffX);
+          }
+        } else {
+          setDrawerGestureOffset(null);
+          if (diffX >= 0) {
+            setDragOffset(diffX);
+          } else {
+            setDragOffset(diffX * 0.18);
+          }
+        }
+      }
+    };
+
+    const handleMouseUp = (e: MouseEvent) => {
+      if (!isMouseActiveRef.current || touchStartXRef.current === null) return;
+
+      const containerWidth = containerRef.current?.clientWidth || window.innerWidth || 400;
+      const halfwayThreshold = containerWidth * 0.5;
+      const diffX = e.clientX - touchStartXRef.current;
+      const dt = Math.max(1, Date.now() - touchStartTimeRef.current);
+      const velocity = diffX / dt;
+
+      if (gestureLockRef.current === 'horizontal') {
+        const isChat = paneViewState === 'chat-only';
+
+        if (isChat) {
+          if (diffX > 0) {
+            if (diffX > 55 || (velocity > 0.35 && diffX > 25)) {
+              openMenu();
+            } else {
+              setDrawerGestureOffset(null);
+            }
+          } else if (diffX < 0) {
+            if (-diffX >= halfwayThreshold || (velocity < -0.4 && diffX < -40)) {
+              setPaneViewState('workspace-only');
+            }
+          }
+        } else {
+          if (diffX > 0) {
+            if (diffX >= halfwayThreshold || (velocity > 0.4 && diffX > 40)) {
+              setPaneViewState('chat-only');
+            }
+          }
+        }
+      }
+
+      setDragOffset(0);
+      setDrawerGestureOffset(null);
+      setIsGesturing(false);
+      isMouseActiveRef.current = false;
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      gestureLockRef.current = null;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [paneViewState, openMenu, setDrawerGestureOffset, setPaneViewState]);
+
+  // Real-time track position & smooth spring transition
+  let transformStyle = 'translate3d(0%, 0, 0)';
+  const transitionStyle = isGesturing
+    ? 'none'
+    : 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)';
+
+  if (paneViewState === 'chat-only') {
+    transformStyle =
+      dragOffset !== 0
+        ? `translate3d(${dragOffset}px, 0, 0)`
+        : 'translate3d(0%, 0, 0)';
+  } else {
+    // Workspace-only: base position is -50% of 200% track (-100% of container)
+    transformStyle =
+      dragOffset !== 0
+        ? `translate3d(calc(-50% + ${dragOffset}px), 0, 0)`
+        : 'translate3d(-50%, 0, 0)';
   }
 
   return (
@@ -216,65 +288,43 @@ export const DualPaneContainer: React.FC = () => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
-      className={`relative flex-1 min-h-0 w-full flex overflow-hidden bg-black ${
-        isDragging ? 'cursor-col-resize select-none' : ''
-      }`}
+      onMouseDown={handleMouseDown}
+      className="relative flex-1 min-h-0 w-full overflow-hidden bg-black"
+      style={{ touchAction: 'pan-y' }}
     >
-      {isSplitMode ? (
-        // Split view (desktop side-by-side with draggable splitter)
-        <div className="w-full h-full min-h-0 flex overflow-hidden">
-          <div
-            id="dual-pane-left"
-            style={{ width: `${splitRatio}%` }}
-            className="h-full min-h-0 overflow-hidden flex flex-col"
-          >
-            <ChatPane />
-          </div>
-
-          <div
-            onMouseDown={() => {
-              isDraggingRef.current = true;
-              setIsDragging(true);
-            }}
-            className="w-1.5 h-full bg-neutral-900 hover:bg-neutral-700 cursor-col-resize flex items-center justify-center transition-colors shrink-0"
-          >
-            <div className="w-0.5 h-8 bg-neutral-600 rounded-full" />
-          </div>
-
-          <div
-            id="dual-pane-right"
-            style={{ width: `${100 - splitRatio}%` }}
-            className="h-full min-h-0 overflow-hidden flex flex-col"
-          >
-            <WorkspacePane />
-          </div>
-        </div>
-      ) : (
-        // Single-pane gesture slider track (w-[200%])
+      {/* 2-Screen Swipeable Slider Track (200% width, exactly 100% per screen) */}
+      <div
+        id="dual-pane-track"
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          width: '200%',
+          height: '100%',
+          flexShrink: 0,
+          transform: transformStyle,
+          transition: transitionStyle,
+          willChange: 'transform',
+        }}
+        className="h-full min-h-0 overflow-hidden"
+      >
+        {/* Left Screen: Chat (Full Screen) */}
         <div
-          style={{
-            transform: transformStyle,
-            transition: transitionStyle,
-          }}
-          className="flex flex-row w-[200%] h-full min-h-0 will-change-transform overflow-hidden"
+          id="dual-pane-left"
+          style={{ width: '50%', flexShrink: 0 }}
+          className="h-full min-h-0 overflow-hidden flex flex-col shrink-0"
         >
-          {/* Left Pane: Chat (width 50% of track = 100% of container) */}
-          <div
-            id="dual-pane-left"
-            className="w-1/2 h-full min-h-0 overflow-hidden flex flex-col shrink-0"
-          >
-            <ChatPane />
-          </div>
-
-          {/* Right Pane: Workspace (width 50% of track = 100% of container) */}
-          <div
-            id="dual-pane-right"
-            className="w-1/2 h-full min-h-0 overflow-hidden flex flex-col shrink-0"
-          >
-            <WorkspacePane />
-          </div>
+          <ChatPane />
         </div>
-      )}
+
+        {/* Right Screen: Workspace / Code (Full Screen) */}
+        <div
+          id="dual-pane-right"
+          style={{ width: '50%', flexShrink: 0 }}
+          className="h-full min-h-0 overflow-hidden flex flex-col shrink-0"
+        >
+          <WorkspacePane />
+        </div>
+      </div>
     </div>
   );
 };
