@@ -778,7 +778,7 @@ export const ChatPane: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => setIsModelModalOpen(true)}
+              onClick={() => openPanel('chat-model-selector')}
               className="px-2 py-1 rounded-lg bg-amber-500/20 text-amber-200 hover:bg-amber-500/30 text-[11px] font-semibold transition-colors shrink-0"
             >
               Switch Account
