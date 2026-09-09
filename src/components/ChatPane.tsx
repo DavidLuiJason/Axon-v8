@@ -17,7 +17,6 @@ import {
   FileText,
   Volume2,
   VolumeX,
-  ArrowRight,
   ArrowDown,
   Sparkles,
   Share2,
@@ -389,16 +388,13 @@ export const ChatPane: React.FC = () => {
                       onClick={() => {
                         setIsPdfSubmenuOpen(true);
                       }}
-                      className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
                     >
-                      <div className="flex items-center gap-2">
-                        <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                        <div>
-                          <div className="font-medium">Export as PDF (.pdf)</div>
-                          <div className="text-[10px] text-neutral-400">Choose Image or Text format</div>
-                        </div>
+                      <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <div>
+                        <div className="font-medium">Export as PDF (.pdf)</div>
+                        <div className="text-[10px] text-neutral-400">Choose Image or Text format</div>
                       </div>
-                      <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
                     </button>
 
                     <button
