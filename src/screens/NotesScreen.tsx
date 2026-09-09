@@ -32,6 +32,10 @@ export const NotesScreen: React.FC = () => {
     deleteNote,
     goBack,
     showToast,
+    openPanel,
+    closePanel,
+    isPanelOpen,
+    activePanelPayload,
   } = useApp();
 
   // Search & Filter state
@@ -39,9 +43,9 @@ export const NotesScreen: React.FC = () => {
   const [projectFilter, setProjectFilter] = useState<'active' | 'all' | string>('active');
   const [categoryFilter, setCategoryFilter] = useState<NoteCategory | 'all'>('all');
 
-  // Creation/Edit modal state
-  const [isCreating, setIsCreating] = useState(false);
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  // Creation/Edit modal state linked to central navigation stack
+  const isCreating = isPanelOpen('note-create') || isPanelOpen('note-edit');
+  const editingNoteId = isPanelOpen('note-edit') ? (activePanelPayload?.noteId || null) : null;
 
   // Form fields
   const [titleInput, setTitleInput] = useState('');
@@ -89,14 +93,26 @@ export const NotesScreen: React.FC = () => {
       });
   }, [notes, projectFilter, activeProjectId, categoryFilter, searchQuery, projects]);
 
+  useEffect(() => {
+    if (editingNoteId) {
+      const note = notes.find((n) => n.id === editingNoteId);
+      if (note) {
+        setTitleInput(note.title);
+        setContentInput(note.content);
+        setProjectInput(note.projectId || activeProjectId);
+        setCategoryInput(note.category || 'general');
+        setTagsInput(note.tags?.join(', ') || '');
+      }
+    }
+  }, [editingNoteId, notes, activeProjectId]);
+
   const handleStartCreate = () => {
     setTitleInput('');
     setContentInput('');
     setProjectInput(activeProjectId);
     setCategoryInput('general');
     setTagsInput('');
-    setEditingNoteId(null);
-    setIsCreating(true);
+    openPanel('note-create');
   };
 
   const handleStartEdit = (note: NoteItem) => {
@@ -105,13 +121,12 @@ export const NotesScreen: React.FC = () => {
     setProjectInput(note.projectId || activeProjectId);
     setCategoryInput(note.category || 'general');
     setTagsInput(note.tags?.join(', ') || '');
-    setEditingNoteId(note.id);
-    setIsCreating(true);
+    openPanel('note-edit', { noteId: note.id });
   };
 
   const handleSave = () => {
     if (!titleInput.trim() && !contentInput.trim()) {
-      setIsCreating(false);
+      closePanel();
       return;
     }
 
@@ -138,15 +153,13 @@ export const NotesScreen: React.FC = () => {
       );
     }
 
-    setIsCreating(false);
-    setEditingNoteId(null);
+    closePanel();
     setTitleInput('');
     setContentInput('');
   };
 
   const handleCancel = () => {
-    setIsCreating(false);
-    setEditingNoteId(null);
+    closePanel();
   };
 
   const handleCopyNote = (text: string) => {

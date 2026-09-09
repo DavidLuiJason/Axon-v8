@@ -28,14 +28,18 @@ export const StorageDiagnosticsScreen: React.FC = () => {
     storageBudget,
     refreshStaleKnowledgeAsset,
     showToast,
+    openPanel,
+    closePanel,
+    isPanelOpen,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'manifest' | 'categories' | 'packs'>('manifest');
   const [selectedCategory, setSelectedCategory] = useState<AssetCategory | 'all'>('all');
-  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
-  const [isTrimModalOpen, setIsTrimModalOpen] = useState(false);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
-  const [isOnboardingModalOpen, setIsOnboardingModalOpen] = useState(false);
+
+  const isBudgetModalOpen = isPanelOpen('storage-budget');
+  const isTrimModalOpen = isPanelOpen('storage-trim');
+  const isRegisterModalOpen = isPanelOpen('storage-register');
+  const isOnboardingModalOpen = isPanelOpen('storage-onboarding');
 
   const staleItems = assetManifest.filter((a) => a.knowledgeStatus === 'stale');
 
@@ -70,7 +74,7 @@ export const StorageDiagnosticsScreen: React.FC = () => {
           <button
             id="header-setup-budget-btn"
             type="button"
-            onClick={() => setIsOnboardingModalOpen(true)}
+            onClick={() => openPanel('storage-onboarding')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-neutral-300 transition-colors"
           >
             <Sliders className="w-3.5 h-3.5 text-neutral-400" />
@@ -80,7 +84,7 @@ export const StorageDiagnosticsScreen: React.FC = () => {
           <button
             id="header-trim-btn"
             type="button"
-            onClick={() => setIsTrimModalOpen(true)}
+            onClick={() => openPanel('storage-trim')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-xs font-medium text-white transition-colors"
           >
             <Scissors className="w-3.5 h-3.5 text-neutral-300" />
@@ -90,7 +94,7 @@ export const StorageDiagnosticsScreen: React.FC = () => {
           <button
             id="header-register-asset-btn"
             type="button"
-            onClick={() => setIsRegisterModalOpen(true)}
+            onClick={() => openPanel('storage-register')}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-neutral-200 text-xs font-semibold text-black transition-colors"
           >
             <FilePlus className="w-3.5 h-3.5" />
@@ -101,8 +105,8 @@ export const StorageDiagnosticsScreen: React.FC = () => {
 
       {/* Storage Budget & Progress Telemetry */}
       <StorageBudgetBar
-        onOpenBudgetModal={() => setIsBudgetModalOpen(true)}
-        onOpenTrimModal={() => setIsTrimModalOpen(true)}
+        onOpenBudgetModal={() => openPanel('storage-budget')}
+        onOpenTrimModal={() => openPanel('storage-trim')}
       />
 
       {/* Stale Knowledge Notification Banner if applicable */}
@@ -200,22 +204,22 @@ export const StorageDiagnosticsScreen: React.FC = () => {
       {/* Modals */}
       <BudgetSettingModal
         isOpen={isBudgetModalOpen}
-        onClose={() => setIsBudgetModalOpen(false)}
+        onClose={() => closePanel()}
       />
 
       <TrimOptimizerModal
         isOpen={isTrimModalOpen}
-        onClose={() => setIsTrimModalOpen(false)}
+        onClose={() => closePanel()}
       />
 
       <RegisterAssetModal
         isOpen={isRegisterModalOpen}
-        onClose={() => setIsRegisterModalOpen(false)}
+        onClose={() => closePanel()}
       />
 
       <StorageOnboardingModal
         isOpen={isOnboardingModalOpen}
-        onClose={() => setIsOnboardingModalOpen(false)}
+        onClose={() => closePanel()}
         canDismiss={true}
       />
     </div>

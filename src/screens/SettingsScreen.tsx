@@ -65,9 +65,16 @@ export const SettingsScreen: React.FC = () => {
     storageBreakdown,
     storageBudget,
     showToast,
+    pushNavState,
+    activePanelPayload,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'ai' | 'appearance' | 'system'>('ai');
+  const activeTab: 'ai' | 'appearance' | 'system' =
+    (activePanelPayload?.settingsTab as 'ai' | 'appearance' | 'system') || 'ai';
+
+  const setActiveTab = (tab: 'ai' | 'appearance' | 'system') => {
+    pushNavState({ panelPayload: { ...(activePanelPayload || {}), settingsTab: tab } });
+  };
 
   const appIconFileInputRef = useRef<HTMLInputElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);

@@ -13,20 +13,22 @@ export const AutomationScreen: React.FC = () => {
     toggleRule,
     testRule,
     showToast,
+    openPanel,
+    closePanel,
+    isPanelOpen,
+    activePanelPayload,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'rules' | 'simulator'>('rules');
-  const [editingRule, setEditingRule] = useState<AutomationRule | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const isModalOpen = isPanelOpen('rule-editor');
+  const editingRule = isPanelOpen('rule-editor') ? (activePanelPayload?.rule as AutomationRule | null) : null;
 
   const handleOpenCreate = () => {
-    setEditingRule(null);
-    setIsModalOpen(true);
+    openPanel('rule-editor', { rule: null });
   };
 
   const handleOpenEdit = (rule: AutomationRule) => {
-    setEditingRule(rule);
-    setIsModalOpen(true);
+    openPanel('rule-editor', { rule });
   };
 
   return (
@@ -149,10 +151,10 @@ export const AutomationScreen: React.FC = () => {
       <RuleEditorModal
         isOpen={isModalOpen}
         initialRule={editingRule}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => closePanel()}
         onSave={(ruleData) => {
           saveRule(ruleData);
-          setIsModalOpen(false);
+          closePanel();
         }}
       />
     </div>

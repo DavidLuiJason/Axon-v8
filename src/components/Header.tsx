@@ -20,13 +20,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMenu }) => {
     currentScreen,
     goBack,
     navigateTo,
+    canGoBack,
+    openPanel,
+    closePanel,
+    isPanelOpen,
     paneViewState,
     setPaneViewState,
     icons,
     activeProject,
   } = useApp();
 
-  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const isProjectModalOpen = isPanelOpen('project-switcher');
 
   const isMainScreen = currentScreen === 'axon';
 
@@ -79,17 +83,31 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMenu }) => {
       className="shrink-0 z-40 h-14 w-full bg-black/90 backdrop-blur-md border-b border-neutral-800/80 px-3 flex items-center justify-between select-none"
     >
       {/* Left side: Hamburger on main screen OR Back button on all other screens */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         {isMainScreen ? (
-          <button
-            id="hamburger-trigger-btn"
-            type="button"
-            onClick={onOpenMenu}
-            aria-label="Open navigation menu"
-            className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-900 active:scale-95 transition-all"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              id="hamburger-trigger-btn"
+              type="button"
+              onClick={onOpenMenu}
+              aria-label="Open navigation menu"
+              className="p-2 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-900 active:scale-95 transition-all"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            {canGoBack && (
+              <button
+                id="global-back-btn"
+                type="button"
+                onClick={goBack}
+                aria-label="Go back"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-neutral-300 hover:text-white hover:bg-neutral-900 active:scale-95 transition-all font-medium text-xs border border-neutral-800"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back</span>
+              </button>
+            )}
+          </div>
         ) : (
           <button
             id="global-back-btn"
@@ -124,7 +142,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMenu }) => {
           <button
             id="header-project-selector-btn"
             type="button"
-            onClick={() => setIsProjectModalOpen(true)}
+            onClick={() => openPanel('project-switcher')}
             title={`Active Project: ${activeProject.name} (Click to switch or manage projects)`}
             className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 hover:text-white hover:border-neutral-700 active:scale-95 transition-all max-w-[150px]"
           >
@@ -144,7 +162,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMenu }) => {
         <button
           id="header-mobile-project-btn"
           type="button"
-          onClick={() => setIsProjectModalOpen(true)}
+          onClick={() => openPanel('project-switcher')}
           title={`Project: ${activeProject.name}`}
           className="sm:hidden flex items-center gap-1 px-2 py-1 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] text-neutral-300 hover:text-white active:scale-95 transition-all max-w-[100px]"
         >
@@ -207,7 +225,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenMenu }) => {
       {/* Project Switcher Modal */}
       <ProjectSwitcherModal
         isOpen={isProjectModalOpen}
-        onClose={() => setIsProjectModalOpen(false)}
+        onClose={() => closePanel('project-switcher')}
       />
     </header>
   );

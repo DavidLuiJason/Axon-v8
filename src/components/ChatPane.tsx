@@ -50,20 +50,23 @@ export const ChatPane: React.FC = () => {
     theme,
     setPaneViewState,
     liveThinkingStatus,
+    openPanel,
+    closePanel,
+    isPanelOpen,
   } = useApp();
 
   const [inputVal, setInputVal] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
-  const [isModelModalOpen, setIsModelModalOpen] = useState(false);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [sharedMessageId, setSharedMessageId] = useState<string | null>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [isShortcutBarOpen, setIsShortcutBarOpen] = useState(false);
 
-  // Conversation extraction menu
-  const [isExtractMenuOpen, setIsExtractMenuOpen] = useState(false);
-  const [isPdfSubmenuOpen, setIsPdfSubmenuOpen] = useState(false);
+  // Central Navigation & Panel State Integration
+  const isModelModalOpen = isPanelOpen('chat-model-selector');
+  const isShortcutBarOpen = isPanelOpen('chat-shortcuts');
+  const isExtractMenuOpen = isPanelOpen('chat-export') || isPanelOpen('chat-export-pdf');
+  const isPdfSubmenuOpen = isPanelOpen('chat-export-pdf');
   const [isExtractingNote, setIsExtractingNote] = useState(false);
   const extractMenuRef = useRef<HTMLDivElement>(null);
 
@@ -122,13 +125,14 @@ export const ChatPane: React.FC = () => {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (extractMenuRef.current && !extractMenuRef.current.contains(e.target as Node)) {
-        setIsExtractMenuOpen(false);
-        setIsPdfSubmenuOpen(false);
+        if (isExtractMenuOpen) {
+          closePanel();
+        }
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isExtractMenuOpen, closePanel]);
 
   // Text-to-speech with Claude-styled audio waveform
   const handleToggleSpeak = (msgId: string, text: string) => {
@@ -245,7 +249,7 @@ export const ChatPane: React.FC = () => {
 
   const handleSaveFullConversation = () => {
     setIsExtractingNote(true);
-    setIsExtractMenuOpen(false);
+    closePanel();
     setTimeout(() => {
       extractConversationToNote();
       setIsExtractingNote(false);
@@ -266,7 +270,7 @@ export const ChatPane: React.FC = () => {
         <button
           id="chat-model-selector-btn"
           type="button"
-          onClick={() => setIsModelModalOpen(true)}
+          onClick={() => openPanel('chat-model-selector')}
           className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 active:scale-95 transition-all text-xs font-medium text-neutral-200"
         >
           <div className="flex items-center gap-1.5">
@@ -297,7 +301,11 @@ export const ChatPane: React.FC = () => {
                   showToast('No messages in active chat to export. Send a message first.');
                   return;
                 }
-                setIsExtractMenuOpen(!isExtractMenuOpen);
+                if (isExtractMenuOpen) {
+                  closePanel();
+                } else {
+                  openPanel('chat-export');
+                }
               }}
               disabled={isExtractingNote}
               aria-label="Save or export conversation"
@@ -325,7 +333,7 @@ export const ChatPane: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
+                        closePanel();
                         handleSaveFullConversation();
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
@@ -340,7 +348,7 @@ export const ChatPane: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
+                        closePanel();
                         exportConversationToFile('markdown');
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
@@ -355,7 +363,7 @@ export const ChatPane: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
+                        closePanel();
                         exportConversationToFile('text');
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
@@ -370,7 +378,7 @@ export const ChatPane: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
+                        closePanel();
                         exportConversationToFile('json');
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
@@ -386,7 +394,7 @@ export const ChatPane: React.FC = () => {
                       id="export-chat-pdf-btn"
                       type="button"
                       onClick={() => {
-                        setIsPdfSubmenuOpen(true);
+                        openPanel('chat-export-pdf');
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
                     >
@@ -400,7 +408,7 @@ export const ChatPane: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
+                        closePanel();
                         const transcript = activeProjectMessages
                           .map((m) => `${m.sender === 'user' ? 'User' : 'AXON'}: ${m.text}`)
                           .join('\n\n');
@@ -421,7 +429,7 @@ export const ChatPane: React.FC = () => {
                     <div className="flex items-center gap-1.5 pb-2 mb-1 border-b border-neutral-800 text-neutral-300">
                       <button
                         type="button"
-                        onClick={() => setIsPdfSubmenuOpen(false)}
+                        onClick={() => closePanel('chat-export-pdf')}
                         className="p-1 rounded-md hover:bg-neutral-850 text-neutral-400 hover:text-white transition-colors"
                         title="Back to export options"
                         aria-label="Back"
@@ -435,8 +443,7 @@ export const ChatPane: React.FC = () => {
                       id="export-pdf-image-btn"
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
-                        setIsPdfSubmenuOpen(false);
+                        closePanel();
                         exportConversationToFile('image-pdf');
                       }}
                       className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border border-neutral-800/70 hover:border-neutral-700 bg-neutral-900/30"
@@ -456,8 +463,7 @@ export const ChatPane: React.FC = () => {
                       id="export-pdf-text-btn"
                       type="button"
                       onClick={() => {
-                        setIsExtractMenuOpen(false);
-                        setIsPdfSubmenuOpen(false);
+                        closePanel();
                         exportConversationToFile('pdf');
                       }}
                       className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border border-neutral-800/70 hover:border-neutral-700 bg-neutral-900/30"
@@ -844,7 +850,7 @@ export const ChatPane: React.FC = () => {
         {/* Slide-up Shortcut Bar directly above the input bar */}
         <ChatShortcutBar
           isOpen={isShortcutBarOpen}
-          onClose={() => setIsShortcutBarOpen(false)}
+          onClose={() => closePanel('chat-shortcuts')}
           onInsertPrompt={(prompt) =>
             setInputVal((prev) => (prev ? prev + ' ' + prompt : prompt))
           }
@@ -889,7 +895,7 @@ export const ChatPane: React.FC = () => {
           <button
             id="chat-shortcut-toggle-btn"
             type="button"
-            onClick={() => setIsShortcutBarOpen((prev) => !prev)}
+            onClick={() => (isShortcutBarOpen ? closePanel('chat-shortcuts') : openPanel('chat-shortcuts'))}
             aria-label={isShortcutBarOpen ? 'Hide shortcuts' : 'Show quick shortcuts'}
             title={isShortcutBarOpen ? 'Hide Shortcuts' : 'Quick Shortcuts'}
             className={`p-2 rounded-xl transition-all active:scale-95 shrink-0 ${
@@ -945,7 +951,7 @@ export const ChatPane: React.FC = () => {
       {/* Model & Account Switching Modal */}
       <ModelSelectorModal
         isOpen={isModelModalOpen}
-        onClose={() => setIsModelModalOpen(false)}
+        onClose={() => closePanel('chat-model-selector')}
       />
     </div>
   );

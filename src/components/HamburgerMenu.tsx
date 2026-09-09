@@ -33,9 +33,12 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose })
     projects,
     setActiveProjectId,
     drawerGestureOffset,
+    openPanel,
+    closePanel,
+    isPanelOpen,
   } = useApp();
 
-  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
+  const isProjectModalOpen = isPanelOpen('project-switcher');
   const [isWorkspaceExpanded, setIsWorkspaceExpanded] = useState(false);
 
   // Real-time gesture drag tracking for drawer (iOS / ChatGPT style)
@@ -311,7 +314,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose })
                   <button
                     type="button"
                     onClick={() => {
-                      setIsProjectModalOpen(true);
+                      openPanel('project-switcher');
                     }}
                     className="text-white hover:text-neutral-300 transition-colors flex items-center gap-1 font-medium capitalize text-[11px]"
                   >
@@ -354,7 +357,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose })
                 <div className="pt-1.5 border-t border-neutral-800/80 flex items-center justify-end px-1">
                   <button
                     type="button"
-                    onClick={() => setIsProjectModalOpen(true)}
+                    onClick={() => openPanel('project-switcher')}
                     className="text-[11px] text-neutral-400 hover:text-white transition-colors"
                   >
                     Manage All Projects →
@@ -413,7 +416,7 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({ isOpen, onClose })
       {/* Project Switcher Modal */}
       <ProjectSwitcherModal
         isOpen={isProjectModalOpen}
-        onClose={() => setIsProjectModalOpen(false)}
+        onClose={() => closePanel('project-switcher')}
       />
     </div>
   );

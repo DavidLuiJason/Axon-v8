@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo } from '
 import {
   ScreenId,
   PaneViewState,
+  NavHistoryEntry,
   ChatMessage,
   NoteItem,
   NoteCategory,
@@ -80,11 +81,24 @@ interface ConfirmationConfig {
 }
 
 interface AppContextType {
-  // Navigation
+  // Navigation & Persistent History Stack
   currentScreen: ScreenId;
   previousScreen: ScreenId | null;
-  navigateTo: (screen: ScreenId) => void;
+  canGoBack: boolean;
+  navHistory: NavHistoryEntry[];
+  navigateTo: (
+    screen: ScreenId,
+    options?: { panel?: string | null; payload?: any; preserveMenu?: boolean }
+  ) => void;
   goBack: () => void;
+
+  // Central Panel & Drawer Navigation
+  activePanel: string | null;
+  activePanelPayload: any;
+  openPanel: (panelId: string, payload?: any) => void;
+  closePanel: (panelId?: string) => void;
+  isPanelOpen: (panelId: string) => boolean;
+  pushNavState: (stateUpdate: Partial<NavHistoryEntry>) => void;
 
   // Dual-pane workspace state
   paneViewState: PaneViewState;
@@ -398,45 +412,113 @@ const STORAGE_KEY = 'axon_app_storage_v1';
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Drawer visibility state
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  // Central Navigation & History Stack (single source of truth for all screens, drawers, panels, and views)
+  const [navHistory, setNavHistory] = useState<NavHistoryEntry[]>([
+    {
+      id: 'root-axon-0',
+      screen: 'axon',
+      isMenuOpen: false,
+      paneViewState: 'chat-only',
+      splitRatio: 100,
+      activePanel: null,
+      panelPayload: null,
+    },
+  ]);
+
   const [drawerGestureOffset, setDrawerGestureOffset] = useState<number | null>(null);
+
+  // Derive current navigation state directly from top of the stack
+  const currentNavEntry = navHistory[navHistory.length - 1] || {
+    id: 'root-fallback',
+    screen: 'axon',
+    isMenuOpen: false,
+    paneViewState: 'chat-only',
+    splitRatio: 100,
+    activePanel: null,
+    panelPayload: null,
+  };
+
+  const currentScreen = currentNavEntry.screen;
+  const isMenuOpen = currentNavEntry.isMenuOpen;
+  const activePanel = currentNavEntry.activePanel;
+  const activePanelPayload = currentNavEntry.panelPayload;
+  const paneViewState = currentNavEntry.paneViewState;
+  const splitRatio = currentNavEntry.splitRatio;
+  const canGoBack = navHistory.length > 1;
+  const previousScreen = navHistory.length > 1 ? navHistory[navHistory.length - 2].screen : null;
+
   const openMenu = () => {
-    setIsMenuOpen(true);
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (top && top.isMenuOpen) return prev;
+      const newEntry: NavHistoryEntry = {
+        ...(top || {
+          screen: 'axon',
+          paneViewState: 'chat-only',
+          splitRatio: 100,
+          activePanel: null,
+          panelPayload: null,
+        }),
+        id: `menu-open-${Date.now()}`,
+        isMenuOpen: true,
+      };
+      return [...prev, newEntry];
+    });
     setDrawerGestureOffset(null);
   };
+
   const closeMenu = () => {
-    setIsMenuOpen(false);
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (!top || !top.isMenuOpen) return prev;
+      if (prev.length > 1) {
+        return prev.slice(0, -1);
+      }
+      return [{ ...top, isMenuOpen: false }];
+    });
     setDrawerGestureOffset(null);
+  };
+
+  const setIsMenuOpen = (open: boolean) => {
+    if (open) openMenu();
+    else closeMenu();
   };
 
   // Live thinking status (concise activity label)
   const [liveThinkingStatus, setLiveThinkingStatus] = useState<string | null>(null);
 
-  // Screen navigation with history stack
-  const [currentScreen, setCurrentScreen] = useState<ScreenId>('axon');
-  const [navHistory, setNavHistory] = useState<ScreenId[]>(['axon']);
-
-  // Dual pane state
-  const [paneViewState, setPaneViewState] = useState<PaneViewState>('chat-only');
-  // splitRatio: 100 = full chat, 0 = full workspace
-  const [splitRatio, setSplitRatio] = useState<number>(100);
-
-  // Sync paneViewState with splitRatio
+  // Sync paneViewState with splitRatio and navigation stack
   const updatePaneViewState = (state: PaneViewState) => {
-    setPaneViewState(state);
-    if (state === 'chat-only') setSplitRatio(100);
-    else if (state === 'workspace-only') setSplitRatio(0);
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (!top) return prev;
+      const newRatio = state === 'chat-only' ? 100 : state === 'workspace-only' ? 0 : top.splitRatio;
+      return [
+        ...prev.slice(0, -1),
+        {
+          ...top,
+          paneViewState: state,
+          splitRatio: newRatio,
+        },
+      ];
+    });
   };
 
   const updateSplitRatio = (ratio: number) => {
     const clamped = Math.max(0, Math.min(100, ratio));
-    setSplitRatio(clamped);
-    if (clamped >= 50) {
-      setPaneViewState('chat-only');
-    } else {
-      setPaneViewState('workspace-only');
-    }
+    const nextView: PaneViewState = clamped >= 50 ? 'chat-only' : 'workspace-only';
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (!top) return prev;
+      return [
+        ...prev.slice(0, -1),
+        {
+          ...top,
+          splitRatio: clamped,
+          paneViewState: nextView,
+        },
+      ];
+    });
   };
 
   // Projects State (Part 6)
@@ -1203,28 +1285,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     runCodeEntries,
   ]);
 
-  // Navigation handlers
-  const navigateTo = (screen: ScreenId) => {
-    if (screen === currentScreen) return;
-    setNavHistory((prev) => [...prev, screen]);
-    setCurrentScreen(screen);
+  // Central Navigation & History Handlers
+  const navigateTo = (
+    screen: ScreenId,
+    options?: { panel?: string | null; payload?: any; preserveMenu?: boolean }
+  ) => {
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      // If user is already on that exact screen with matching menu & panel, avoid duplicate entry
+      if (
+        top &&
+        top.screen === screen &&
+        top.isMenuOpen === !!options?.preserveMenu &&
+        top.activePanel === (options?.panel || null)
+      ) {
+        return prev;
+      }
+
+      // If user had menu or panel open before navigating forward, the prior entry
+      // remains faithfully preserved in the history stack with its menu/panel state!
+      const newEntry: NavHistoryEntry = {
+        id: `nav-${screen}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        screen,
+        isMenuOpen: !!options?.preserveMenu,
+        paneViewState: top ? top.paneViewState : 'chat-only',
+        splitRatio: top ? top.splitRatio : 100,
+        activePanel: options?.panel || null,
+        panelPayload: options?.payload ?? null,
+      };
+      return [...prev, newEntry];
+    });
+    setDrawerGestureOffset(null);
   };
 
   const goBack = () => {
-    if (navHistory.length > 1) {
-      const nextHistory = [...navHistory];
-      nextHistory.pop(); // Pop current screen
-      const prev = nextHistory[nextHistory.length - 1] || 'axon';
-      setNavHistory(nextHistory);
-      setCurrentScreen(prev);
-    } else {
-      // At the root of history, remain at or go to chat home
-      setCurrentScreen('axon');
-      setNavHistory(['axon']);
-    }
+    setNavHistory((prev) => {
+      if (prev.length > 1) {
+        // Pop current navigation entry and restore the exact prior screen and state
+        return prev.slice(0, -1);
+      }
+      // At root: remain on current state! NEVER fall back to hardcoded default.
+      return prev;
+    });
+    setDrawerGestureOffset(null);
   };
 
-  const previousScreen = navHistory.length > 1 ? navHistory[navHistory.length - 2] : null;
+  const openPanel = (panelId: string, payload?: any) => {
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (top && top.activePanel === panelId) return prev;
+      const newEntry: NavHistoryEntry = {
+        ...(top || {
+          screen: 'axon',
+          isMenuOpen: false,
+          paneViewState: 'chat-only',
+          splitRatio: 100,
+        }),
+        id: `panel-${panelId}-${Date.now()}`,
+        activePanel: panelId,
+        panelPayload: payload ?? null,
+      };
+      return [...prev, newEntry];
+    });
+  };
+
+  const closePanel = (panelId?: string) => {
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (!top || !top.activePanel) return prev;
+      if (panelId && top.activePanel !== panelId) return prev;
+      if (prev.length > 1) {
+        return prev.slice(0, -1);
+      }
+      return [{ ...top, activePanel: null, panelPayload: null }];
+    });
+  };
+
+  const isPanelOpen = (panelId: string) => {
+    return activePanel === panelId;
+  };
+
+  const pushNavState = (stateUpdate: Partial<NavHistoryEntry>) => {
+    setNavHistory((prev) => {
+      const top = prev[prev.length - 1];
+      if (!top) return prev;
+      const newEntry: NavHistoryEntry = {
+        ...top,
+        ...stateUpdate,
+        id: `state-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      };
+      return [...prev, newEntry];
+    });
+  };
 
   // Confirmation trigger
   const requestConfirmation = (config: Omit<ConfirmationConfig, 'isOpen'>) => {
@@ -2274,8 +2426,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         currentScreen,
         previousScreen,
+        canGoBack,
+        navHistory,
         navigateTo,
         goBack,
+        activePanel,
+        activePanelPayload,
+        openPanel,
+        closePanel,
+        isPanelOpen,
+        pushNavState,
         paneViewState,
         setPaneViewState: updatePaneViewState,
         splitRatio,

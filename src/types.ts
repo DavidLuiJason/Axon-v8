@@ -20,6 +20,16 @@ export type ScreenId =
 
 export type PaneViewState = 'chat-only' | 'split' | 'workspace-only';
 
+export interface NavHistoryEntry {
+  id: string;
+  screen: ScreenId;
+  isMenuOpen: boolean;
+  paneViewState: PaneViewState;
+  splitRatio: number;
+  activePanel: string | null;
+  panelPayload?: any;
+}
+
 export interface ChatAttachment {
   name: string;
   type: string;
