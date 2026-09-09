@@ -67,7 +67,6 @@ export const ChatPane: React.FC = () => {
   const [isPdfSubmenuOpen, setIsPdfSubmenuOpen] = useState(false);
   const [isExtractingNote, setIsExtractingNote] = useState(false);
   const extractMenuRef = useRef<HTMLDivElement>(null);
-  const imageExportStageRef = useRef<HTMLDivElement>(null);
 
   const [attachedFile, setAttachedFile] = useState<{
     name: string;
@@ -442,7 +441,7 @@ export const ChatPane: React.FC = () => {
                       onClick={() => {
                         setIsExtractMenuOpen(false);
                         setIsPdfSubmenuOpen(false);
-                        exportConversationToFile('image-pdf', imageExportStageRef.current);
+                        exportConversationToFile('image-pdf');
                       }}
                       className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border border-neutral-800/70 hover:border-neutral-700 bg-neutral-900/30"
                     >
@@ -946,66 +945,6 @@ export const ChatPane: React.FC = () => {
         </div>
       </div>
     </div>
-
-      {/* Offscreen Full Conversation Staging Node for Complete Image PDF Capture */}
-      <div
-        ref={imageExportStageRef}
-        id="chat-full-image-export-stage"
-        style={{
-          position: 'fixed',
-          left: '-9999px',
-          top: 0,
-          width: '768px',
-          zIndex: -9999,
-          pointerEvents: 'none',
-        }}
-        className="bg-neutral-950 text-white p-7 space-y-4 font-sans"
-      >
-        <div className="border-b border-neutral-800 pb-4 mb-4 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-lg text-white">AXON • {activeProject.name}</span>
-            </div>
-            <p className="text-xs text-neutral-400 mt-0.5">
-              {activeProject.description || 'Conversation Archive'}
-            </p>
-          </div>
-          <div className="text-right text-xs text-neutral-500 font-mono">
-            <div>{new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</div>
-            <div>{activeProjectMessages.length} message{activeProjectMessages.length === 1 ? '' : 's'}</div>
-          </div>
-        </div>
-
-        {activeProjectMessages.map((msg) => {
-          const isAxon = msg.sender === 'axon' || (msg as any).role === 'assistant';
-          const messageText = typeof msg.text === 'string'
-            ? msg.text
-            : (msg.text && typeof msg.text === 'object' && 'text' in (msg.text as any)
-                ? String((msg.text as any).text)
-                : JSON.stringify(msg.text || ''));
-
-          return (
-            <div
-              key={`export-stage-${msg.id}`}
-              className={`flex flex-col ${isAxon ? 'items-start' : 'items-end'} mb-3`}
-            >
-              <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
-                  isAxon
-                    ? 'bg-neutral-900 border border-neutral-800 text-neutral-100'
-                    : 'bg-white text-black font-normal'
-                }`}
-              >
-                <div className="flex items-center justify-between gap-4 mb-1 text-[10px] opacity-75 font-semibold">
-                  <span>{isAxon ? 'AXON' : 'User'}</span>
-                  <span className="font-mono text-[9px]">{msg.timestamp || ''}</span>
-                </div>
-                <div className="whitespace-pre-wrap break-words">{messageText}</div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       {/* Model & Account Switching Modal */}
       <ModelSelectorModal

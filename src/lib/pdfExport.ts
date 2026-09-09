@@ -1,5 +1,4 @@
 import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
 import { ChatMessage } from '../types';
 
 export function exportChatToPdf(
@@ -122,203 +121,380 @@ export function exportChatToPdf(
 }
 
 /**
- * Image PDF: Produces a PDF made of complete image content covering the entire
+ * Helper to draw a rounded rectangle on a 2D canvas context
+ */
+function drawRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number
+): void {
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, width, height, radius);
+  } else {
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+  }
+}
+
+/**
+ * Helper to wrap text according to maximum printable width on canvas,
+ * respecting newline characters and long unbroken words.
+ */
+function wrapCanvasText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string[] {
+  const lines: string[] = [];
+  const paragraphs = text.split('\n');
+
+  for (const paragraph of paragraphs) {
+    if (paragraph.trim() === '') {
+      lines.push('');
+      continue;
+    }
+
+    const words = paragraph.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = ctx.measureText(testLine).width;
+
+      if (testWidth > maxWidth && currentLine !== '') {
+        lines.push(currentLine);
+        // If single word is longer than maxWidth, break character by character
+        if (ctx.measureText(word).width > maxWidth) {
+          let charLine = '';
+          for (const ch of word) {
+            if (ctx.measureText(charLine + ch).width > maxWidth) {
+              lines.push(charLine);
+              charLine = ch;
+            } else {
+              charLine += ch;
+            }
+          }
+          currentLine = charLine;
+        } else {
+          currentLine = word;
+        }
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines;
+}
+
+/**
+ * Image PDF: Produces a PDF made of complete visual image content covering the entire
  * chat conversation from its very first message to its last, capturing every message in full.
+ * Uses a pure Canvas 2D engine that renders directly to canvas without DOM/CSS stylesheet parsing,
+ * ensuring 100% immunity to CSS color quirks (e.g. oklch) and font parsing conflicts.
  */
 export async function exportChatToImagePdf(
   messages: ChatMessage[],
   projectName: string,
   projectDescription?: string,
-  providedElement?: HTMLElement | null
+  _providedElement?: HTMLElement | null
 ): Promise<void> {
-  let targetElement: HTMLElement;
-  let didCreateElement = false;
+  const CANVAS_WIDTH = 800;
+  const DPR = 2; // High-DPI 2x scale for sharp print quality
+  const PADDING_X = 36;
+  const CONTENT_WIDTH = CANVAS_WIDTH - PADDING_X * 2;
+  const MAX_BUBBLE_WIDTH = Math.min(580, CONTENT_WIDTH * 0.82);
+  const BUBBLE_PADDING_X = 16;
+  const BUBBLE_PADDING_Y = 12;
+  const FONT_FAMILY = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 
-  if (providedElement) {
-    targetElement = providedElement;
-  } else {
-    didCreateElement = true;
-    targetElement = document.createElement('div');
-    targetElement.id = 'temp-image-pdf-stage';
-    targetElement.style.position = 'fixed';
-    targetElement.style.left = '-9999px';
-    targetElement.style.top = '0';
-    targetElement.style.width = '760px';
-    targetElement.style.backgroundColor = '#0a0a0a';
-    targetElement.style.color = '#ffffff';
-    targetElement.style.padding = '32px 28px';
-    targetElement.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    targetElement.style.zIndex = '-9999';
-    targetElement.style.boxSizing = 'border-box';
+  // Measure phase canvas
+  const measureCanvas = document.createElement('canvas');
+  measureCanvas.width = CANVAS_WIDTH;
+  measureCanvas.height = 100;
+  const mCtx = measureCanvas.getContext('2d')!;
 
-    // Header section
-    const header = document.createElement('div');
-    header.style.borderBottom = '1px solid #262626';
-    header.style.paddingBottom = '16px';
-    header.style.marginBottom = '20px';
+  // Measure header
+  let calculatedHeight = 36; // top padding
+  calculatedHeight += 28; // Title
+  if (projectDescription) {
+    calculatedHeight += 20; // Description
+  }
+  calculatedHeight += 24; // Meta & date
+  calculatedHeight += 24; // Divider & margin
 
-    const title = document.createElement('h1');
-    title.style.margin = '0 0 4px 0';
-    title.style.fontSize = '20px';
-    title.style.fontWeight = 'bold';
-    title.textContent = `AXON • ${projectName}`;
-    header.appendChild(title);
-
-    if (projectDescription) {
-      const desc = document.createElement('p');
-      desc.style.margin = '0 0 6px 0';
-      desc.style.fontSize = '12px';
-      desc.style.color = '#a3a3a3';
-      desc.textContent = projectDescription;
-      header.appendChild(desc);
-    }
-
-    const meta = document.createElement('div');
-    meta.style.fontSize = '11px';
-    meta.style.color = '#737373';
-    meta.textContent = `${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} • Full Conversation Archive (${messages.length} messages)`;
-    header.appendChild(meta);
-
-    targetElement.appendChild(header);
-
-    // Render every message from first to last
-    for (const msg of messages) {
-      const isAxon = msg.sender === 'axon' || (msg as any).role === 'assistant';
-      const row = document.createElement('div');
-      row.style.display = 'flex';
-      row.style.flexDirection = 'column';
-      row.style.alignItems = isAxon ? 'flex-start' : 'flex-end';
-      row.style.marginBottom = '14px';
-
-      const bubble = document.createElement('div');
-      bubble.style.maxWidth = '85%';
-      bubble.style.padding = '12px 16px';
-      bubble.style.borderRadius = '16px';
-      bubble.style.fontSize = '13px';
-      bubble.style.lineHeight = '1.5';
-      bubble.style.boxSizing = 'border-box';
-
-      if (isAxon) {
-        bubble.style.backgroundColor = '#171717';
-        bubble.style.color = '#f5f5f5';
-        bubble.style.border = '1px solid #262626';
-      } else {
-        bubble.style.backgroundColor = '#ffffff';
-        bubble.style.color = '#000000';
-      }
-
-      const senderTag = document.createElement('div');
-      senderTag.style.fontSize = '10px';
-      senderTag.style.fontWeight = 'bold';
-      senderTag.style.marginBottom = '4px';
-      senderTag.style.opacity = '0.7';
-      senderTag.textContent = isAxon ? 'AXON' : 'User';
-      bubble.appendChild(senderTag);
-
-      const text = document.createElement('div');
-      text.style.whiteSpace = 'pre-wrap';
-      text.style.wordBreak = 'break-word';
-      text.textContent = typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text);
-      bubble.appendChild(text);
-
-      const time = document.createElement('div');
-      time.style.fontSize = '9px';
-      time.style.marginTop = '6px';
-      time.style.opacity = '0.6';
-      time.style.textAlign = 'right';
-      time.textContent = msg.timestamp || '';
-      bubble.appendChild(time);
-
-      row.appendChild(bubble);
-      targetElement.appendChild(row);
-    }
-
-    document.body.appendChild(targetElement);
+  // Pre-calculate layouts for all messages
+  interface PreparedMessage {
+    isAxon: boolean;
+    senderLabel: string;
+    modelLabel?: string;
+    timestamp: string;
+    wrappedLines: string[];
+    bubbleWidth: number;
+    bubbleHeight: number;
   }
 
-  try {
-    const canvas = await html2canvas(targetElement, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#0a0a0a',
-      windowWidth: 760,
-    });
+  const prepared: PreparedMessage[] = [];
 
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'pt',
-      format: 'a4',
-    });
+  mCtx.font = `13px ${FONT_FAMILY}`;
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 20;
-    const printableWidth = pageWidth - margin * 2;
-    const printableHeight = pageHeight - margin * 2;
+  for (const msg of messages) {
+    const isAxon = msg.sender === 'axon' || (msg as any).role === 'assistant';
+    const senderLabel = isAxon ? 'AXON' : 'USER';
+    const modelLabel = msg.modelUsed ? `(${msg.modelUsed})` : undefined;
+    const timestamp = msg.timestamp || '';
 
-    const canvasRatio = canvas.width / printableWidth;
-    const maxChunkCanvasHeight = Math.floor(printableHeight * canvasRatio);
+    const rawText = typeof msg.text === 'string'
+      ? msg.text
+      : (msg.text && typeof msg.text === 'object' && 'text' in (msg.text as any)
+          ? String((msg.text as any).text)
+          : JSON.stringify(msg.text || ''));
 
-    let yOffset = 0;
-    let pageNumber = 0;
+    const maxTextWidth = MAX_BUBBLE_WIDTH - BUBBLE_PADDING_X * 2;
+    const wrappedLines = wrapCanvasText(mCtx, rawText, maxTextWidth);
 
-    while (yOffset < canvas.height) {
-      if (pageNumber > 0) {
-        doc.addPage();
-      }
-
-      const currentChunkHeight = Math.min(maxChunkCanvasHeight, canvas.height - yOffset);
-
-      const chunkCanvas = document.createElement('canvas');
-      chunkCanvas.width = canvas.width;
-      chunkCanvas.height = currentChunkHeight;
-      const chunkCtx = chunkCanvas.getContext('2d');
-
-      if (chunkCtx) {
-        chunkCtx.fillStyle = '#0a0a0a';
-        chunkCtx.fillRect(0, 0, chunkCanvas.width, currentChunkHeight);
-        chunkCtx.drawImage(
-          canvas,
-          0,
-          yOffset,
-          canvas.width,
-          currentChunkHeight,
-          0,
-          0,
-          canvas.width,
-          currentChunkHeight
-        );
-
-        const chunkData = chunkCanvas.toDataURL('image/jpeg', 0.95);
-        const renderedHeight = currentChunkHeight / canvasRatio;
-        doc.addImage(chunkData, 'JPEG', margin, margin, printableWidth, renderedHeight);
-      }
-
-      yOffset += currentChunkHeight;
-      pageNumber++;
+    // Calculate required bubble width
+    let maxLineWidth = 0;
+    for (const line of wrappedLines) {
+      const w = mCtx.measureText(line).width;
+      if (w > maxLineWidth) maxLineWidth = w;
     }
 
-    const totalPages = doc.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(140, 140, 140);
-      doc.text(
-        `Page ${i} of ${totalPages} • Complete Visual Archive (${messages.length} messages) • AXON`,
-        pageWidth / 2,
-        pageHeight - 8,
-        { align: 'center' }
+    // Measure sender header width to ensure header fits
+    mCtx.font = `bold 10px ${FONT_FAMILY}`;
+    const headerWidth = mCtx.measureText(senderLabel + (modelLabel ? ` ${modelLabel}` : '')).width + 80;
+    mCtx.font = `13px ${FONT_FAMILY}`;
+
+    const bubbleWidth = Math.min(
+      MAX_BUBBLE_WIDTH,
+      Math.max(140, Math.max(maxLineWidth, headerWidth) + BUBBLE_PADDING_X * 2)
+    );
+
+    const lineHeight = 19;
+    const textHeight = Math.max(lineHeight, wrappedLines.length * lineHeight);
+    const bubbleHeight = BUBBLE_PADDING_Y * 2 + 18 + textHeight; // 18px for sender/time row
+
+    prepared.push({
+      isAxon,
+      senderLabel,
+      modelLabel,
+      timestamp,
+      wrappedLines,
+      bubbleWidth,
+      bubbleHeight,
+    });
+
+    calculatedHeight += bubbleHeight + 16; // 16px message gap
+  }
+
+  calculatedHeight += 36; // bottom padding
+
+  // Create actual high-resolution canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = CANVAS_WIDTH * DPR;
+  canvas.height = calculatedHeight * DPR;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.scale(DPR, DPR);
+
+  // Background
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, calculatedHeight);
+
+  // Draw Header
+  let curY = 40;
+
+  // Title
+  ctx.font = `bold 22px ${FONT_FAMILY}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`AXON • ${projectName}`, PADDING_X, curY);
+  curY += 24;
+
+  // Description
+  if (projectDescription) {
+    ctx.font = `12px ${FONT_FAMILY}`;
+    ctx.fillStyle = '#a3a3a3';
+    ctx.fillText(projectDescription, PADDING_X, curY);
+    curY += 20;
+  }
+
+  // Meta info
+  ctx.font = `11px ${FONT_FAMILY}`;
+  ctx.fillStyle = '#737373';
+  const metaDate = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  ctx.fillText(`${metaDate} • Complete Visual Archive (${messages.length} messages) • AXON`, PADDING_X, curY);
+  curY += 16;
+
+  // Divider
+  ctx.strokeStyle = '#262626';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(PADDING_X, curY);
+  ctx.lineTo(CANVAS_WIDTH - PADDING_X, curY);
+  ctx.stroke();
+  curY += 24;
+
+  // Draw Messages
+  for (const item of prepared) {
+    const bubbleX = item.isAxon
+      ? PADDING_X
+      : CANVAS_WIDTH - PADDING_X - item.bubbleWidth;
+
+    // Bubble background & border
+    if (item.isAxon) {
+      ctx.fillStyle = '#171717';
+      ctx.strokeStyle = '#262626';
+      ctx.lineWidth = 1;
+      drawRoundedRect(ctx, bubbleX, curY, item.bubbleWidth, item.bubbleHeight, 14);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = '#ffffff';
+      drawRoundedRect(ctx, bubbleX, curY, item.bubbleWidth, item.bubbleHeight, 14);
+      ctx.fill();
+    }
+
+    // Sender tag & Timestamp
+    const topRowY = curY + BUBBLE_PADDING_Y + 10;
+
+    if (item.isAxon) {
+      // AXON Tag
+      ctx.font = `bold 10px ${FONT_FAMILY}`;
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillText(item.senderLabel, bubbleX + BUBBLE_PADDING_X, topRowY);
+
+      if (item.modelLabel) {
+        const tagW = ctx.measureText(item.senderLabel).width;
+        ctx.font = `9px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#71717a';
+        ctx.fillText(item.modelLabel, bubbleX + BUBBLE_PADDING_X + tagW + 6, topRowY);
+      }
+
+      // Timestamp
+      if (item.timestamp) {
+        ctx.font = `9px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#71717a';
+        const timeW = ctx.measureText(item.timestamp).width;
+        ctx.fillText(item.timestamp, bubbleX + item.bubbleWidth - BUBBLE_PADDING_X - timeW, topRowY);
+      }
+    } else {
+      // User Tag
+      ctx.font = `bold 10px ${FONT_FAMILY}`;
+      ctx.fillStyle = '#525252';
+      ctx.fillText(item.senderLabel, bubbleX + BUBBLE_PADDING_X, topRowY);
+
+      // Timestamp
+      if (item.timestamp) {
+        ctx.font = `9px ${FONT_FAMILY}`;
+        ctx.fillStyle = '#737373';
+        const timeW = ctx.measureText(item.timestamp).width;
+        ctx.fillText(item.timestamp, bubbleX + item.bubbleWidth - BUBBLE_PADDING_X - timeW, topRowY);
+      }
+    }
+
+    // Message Body Text
+    ctx.font = `13px ${FONT_FAMILY}`;
+    ctx.fillStyle = item.isAxon ? '#f5f5f5' : '#0a0a0a';
+
+    let textY = curY + BUBBLE_PADDING_Y + 28;
+    for (const line of item.wrappedLines) {
+      if (line) {
+        ctx.fillText(line, bubbleX + BUBBLE_PADDING_X, textY);
+      }
+      textY += 19;
+    }
+
+    curY += item.bubbleHeight + 16;
+  }
+
+  // Convert canvas to Multi-page A4 PDF
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'pt',
+    format: 'a4',
+  });
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const printableWidth = pageWidth - margin * 2;
+  const printableHeight = pageHeight - margin * 2 - 14; // leave room for footer
+
+  const canvasRatio = (CANVAS_WIDTH * DPR) / printableWidth;
+  const maxChunkCanvasHeight = Math.floor(printableHeight * canvasRatio);
+
+  let yOffset = 0;
+  let pageNumber = 0;
+
+  while (yOffset < canvas.height) {
+    if (pageNumber > 0) {
+      doc.addPage();
+    }
+
+    const currentChunkHeight = Math.min(maxChunkCanvasHeight, canvas.height - yOffset);
+
+    const chunkCanvas = document.createElement('canvas');
+    chunkCanvas.width = canvas.width;
+    chunkCanvas.height = currentChunkHeight;
+    const chunkCtx = chunkCanvas.getContext('2d');
+
+    if (chunkCtx) {
+      chunkCtx.fillStyle = '#0a0a0a';
+      chunkCtx.fillRect(0, 0, chunkCanvas.width, currentChunkHeight);
+      chunkCtx.drawImage(
+        canvas,
+        0,
+        yOffset,
+        canvas.width,
+        currentChunkHeight,
+        0,
+        0,
+        canvas.width,
+        currentChunkHeight
       );
+
+      const chunkData = chunkCanvas.toDataURL('image/jpeg', 0.95);
+      const renderedHeight = currentChunkHeight / canvasRatio;
+      doc.addImage(chunkData, 'JPEG', margin, margin, printableWidth, renderedHeight);
     }
 
-    const safeName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    doc.save(`axon-visual-chat-${safeName}-${Date.now()}.pdf`);
-  } finally {
-    if (didCreateElement && targetElement.parentNode) {
-      targetElement.parentNode.removeChild(targetElement);
-    }
+    yOffset += currentChunkHeight;
+    pageNumber++;
   }
+
+  // Add Page Numbers in Footer
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(140, 140, 140);
+    doc.text(
+      `Page ${i} of ${totalPages} • Complete Visual Archive (${messages.length} messages) • AXON`,
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: 'center' }
+    );
+  }
+
+  const safeName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  doc.save(`axon-visual-chat-${safeName}-${Date.now()}.pdf`);
 }
+
 
