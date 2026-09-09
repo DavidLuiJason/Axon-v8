@@ -2,6 +2,14 @@ import { AIAccount, AIModelOption } from '../types';
 
 export const AVAILABLE_AI_MODELS: AIModelOption[] = [
   {
+    id: 'axon-offline-core',
+    name: 'AXON Local Core',
+    provider: 'axon',
+    providerName: 'AXON Engine',
+    badge: 'Offline Safe',
+    description: 'On-device local assistant capable of offline queries, calculations, and local scripts.',
+  },
+  {
     id: 'gemini-2.5-flash',
     name: 'Gemini 2.5 Flash',
     provider: 'gemini',
@@ -16,14 +24,6 @@ export const AVAILABLE_AI_MODELS: AIModelOption[] = [
     providerName: 'Google',
     badge: 'Reasoning',
     description: 'Complex reasoning, advanced coding synthesis, and architectural design.',
-  },
-  {
-    id: 'axon-offline-core',
-    name: 'AXON Local Core',
-    provider: 'axon',
-    providerName: 'AXON Engine',
-    badge: 'Offline Safe',
-    description: 'On-device local assistant capable of offline queries, calculations, and local scripts.',
   },
 ];
 

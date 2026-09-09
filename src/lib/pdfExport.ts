@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 import { ChatMessage } from '../types';
 
 export function exportChatToPdf(
@@ -119,3 +120,205 @@ export function exportChatToPdf(
   const safeName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   doc.save(`axon-chat-${safeName}-${Date.now()}.pdf`);
 }
+
+/**
+ * Image PDF: Produces a PDF made of complete image content covering the entire
+ * chat conversation from its very first message to its last, capturing every message in full.
+ */
+export async function exportChatToImagePdf(
+  messages: ChatMessage[],
+  projectName: string,
+  projectDescription?: string,
+  providedElement?: HTMLElement | null
+): Promise<void> {
+  let targetElement: HTMLElement;
+  let didCreateElement = false;
+
+  if (providedElement) {
+    targetElement = providedElement;
+  } else {
+    didCreateElement = true;
+    targetElement = document.createElement('div');
+    targetElement.id = 'temp-image-pdf-stage';
+    targetElement.style.position = 'fixed';
+    targetElement.style.left = '-9999px';
+    targetElement.style.top = '0';
+    targetElement.style.width = '760px';
+    targetElement.style.backgroundColor = '#0a0a0a';
+    targetElement.style.color = '#ffffff';
+    targetElement.style.padding = '32px 28px';
+    targetElement.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    targetElement.style.zIndex = '-9999';
+    targetElement.style.boxSizing = 'border-box';
+
+    // Header section
+    const header = document.createElement('div');
+    header.style.borderBottom = '1px solid #262626';
+    header.style.paddingBottom = '16px';
+    header.style.marginBottom = '20px';
+
+    const title = document.createElement('h1');
+    title.style.margin = '0 0 4px 0';
+    title.style.fontSize = '20px';
+    title.style.fontWeight = 'bold';
+    title.textContent = `AXON • ${projectName}`;
+    header.appendChild(title);
+
+    if (projectDescription) {
+      const desc = document.createElement('p');
+      desc.style.margin = '0 0 6px 0';
+      desc.style.fontSize = '12px';
+      desc.style.color = '#a3a3a3';
+      desc.textContent = projectDescription;
+      header.appendChild(desc);
+    }
+
+    const meta = document.createElement('div');
+    meta.style.fontSize = '11px';
+    meta.style.color = '#737373';
+    meta.textContent = `${new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })} • Full Conversation Archive (${messages.length} messages)`;
+    header.appendChild(meta);
+
+    targetElement.appendChild(header);
+
+    // Render every message from first to last
+    for (const msg of messages) {
+      const isAxon = msg.sender === 'axon' || (msg as any).role === 'assistant';
+      const row = document.createElement('div');
+      row.style.display = 'flex';
+      row.style.flexDirection = 'column';
+      row.style.alignItems = isAxon ? 'flex-start' : 'flex-end';
+      row.style.marginBottom = '14px';
+
+      const bubble = document.createElement('div');
+      bubble.style.maxWidth = '85%';
+      bubble.style.padding = '12px 16px';
+      bubble.style.borderRadius = '16px';
+      bubble.style.fontSize = '13px';
+      bubble.style.lineHeight = '1.5';
+      bubble.style.boxSizing = 'border-box';
+
+      if (isAxon) {
+        bubble.style.backgroundColor = '#171717';
+        bubble.style.color = '#f5f5f5';
+        bubble.style.border = '1px solid #262626';
+      } else {
+        bubble.style.backgroundColor = '#ffffff';
+        bubble.style.color = '#000000';
+      }
+
+      const senderTag = document.createElement('div');
+      senderTag.style.fontSize = '10px';
+      senderTag.style.fontWeight = 'bold';
+      senderTag.style.marginBottom = '4px';
+      senderTag.style.opacity = '0.7';
+      senderTag.textContent = isAxon ? 'AXON' : 'User';
+      bubble.appendChild(senderTag);
+
+      const text = document.createElement('div');
+      text.style.whiteSpace = 'pre-wrap';
+      text.style.wordBreak = 'break-word';
+      text.textContent = typeof msg.text === 'string' ? msg.text : JSON.stringify(msg.text);
+      bubble.appendChild(text);
+
+      const time = document.createElement('div');
+      time.style.fontSize = '9px';
+      time.style.marginTop = '6px';
+      time.style.opacity = '0.6';
+      time.style.textAlign = 'right';
+      time.textContent = msg.timestamp || '';
+      bubble.appendChild(time);
+
+      row.appendChild(bubble);
+      targetElement.appendChild(row);
+    }
+
+    document.body.appendChild(targetElement);
+  }
+
+  try {
+    const canvas = await html2canvas(targetElement, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#0a0a0a',
+      windowWidth: 760,
+    });
+
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4',
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 20;
+    const printableWidth = pageWidth - margin * 2;
+    const printableHeight = pageHeight - margin * 2;
+
+    const canvasRatio = canvas.width / printableWidth;
+    const maxChunkCanvasHeight = Math.floor(printableHeight * canvasRatio);
+
+    let yOffset = 0;
+    let pageNumber = 0;
+
+    while (yOffset < canvas.height) {
+      if (pageNumber > 0) {
+        doc.addPage();
+      }
+
+      const currentChunkHeight = Math.min(maxChunkCanvasHeight, canvas.height - yOffset);
+
+      const chunkCanvas = document.createElement('canvas');
+      chunkCanvas.width = canvas.width;
+      chunkCanvas.height = currentChunkHeight;
+      const chunkCtx = chunkCanvas.getContext('2d');
+
+      if (chunkCtx) {
+        chunkCtx.fillStyle = '#0a0a0a';
+        chunkCtx.fillRect(0, 0, chunkCanvas.width, currentChunkHeight);
+        chunkCtx.drawImage(
+          canvas,
+          0,
+          yOffset,
+          canvas.width,
+          currentChunkHeight,
+          0,
+          0,
+          canvas.width,
+          currentChunkHeight
+        );
+
+        const chunkData = chunkCanvas.toDataURL('image/jpeg', 0.95);
+        const renderedHeight = currentChunkHeight / canvasRatio;
+        doc.addImage(chunkData, 'JPEG', margin, margin, printableWidth, renderedHeight);
+      }
+
+      yOffset += currentChunkHeight;
+      pageNumber++;
+    }
+
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(140, 140, 140);
+      doc.text(
+        `Page ${i} of ${totalPages} • Complete Visual Archive (${messages.length} messages) • AXON`,
+        pageWidth / 2,
+        pageHeight - 8,
+        { align: 'center' }
+      );
+    }
+
+    const safeName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    doc.save(`axon-visual-chat-${safeName}-${Date.now()}.pdf`);
+  } finally {
+    if (didCreateElement && targetElement.parentNode) {
+      targetElement.parentNode.removeChild(targetElement);
+    }
+  }
+}
+

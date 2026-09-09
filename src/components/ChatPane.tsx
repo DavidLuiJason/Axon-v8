@@ -22,6 +22,8 @@ import {
   Sparkles,
   Share2,
   LayoutGrid,
+  ArrowLeft,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { AxonLogo } from './AxonLogo';
@@ -62,8 +64,10 @@ export const ChatPane: React.FC = () => {
 
   // Conversation extraction menu
   const [isExtractMenuOpen, setIsExtractMenuOpen] = useState(false);
+  const [isPdfSubmenuOpen, setIsPdfSubmenuOpen] = useState(false);
   const [isExtractingNote, setIsExtractingNote] = useState(false);
   const extractMenuRef = useRef<HTMLDivElement>(null);
+  const imageExportStageRef = useRef<HTMLDivElement>(null);
 
   const [attachedFile, setAttachedFile] = useState<{
     name: string;
@@ -121,6 +125,7 @@ export const ChatPane: React.FC = () => {
     const handleClickOutside = (e: MouseEvent) => {
       if (extractMenuRef.current && !extractMenuRef.current.contains(e.target as Node)) {
         setIsExtractMenuOpen(false);
+        setIsPdfSubmenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -310,107 +315,170 @@ export const ChatPane: React.FC = () => {
                 id="chat-extract-dropdown"
                 className="absolute right-0 top-9 w-64 bg-neutral-950 border border-neutral-800 rounded-xl shadow-2xl p-1.5 z-50 text-xs space-y-1 animate-in fade-in zoom-in-95 duration-150"
               >
-                <div className="px-2 py-1 text-[10px] uppercase font-semibold text-neutral-400 tracking-wider flex items-center justify-between">
-                  <span>Save & Export Chat</span>
-                  <span className="text-[10px] text-neutral-500 font-mono">
-                    {activeProjectMessages.length} msg{activeProjectMessages.length === 1 ? '' : 's'}
-                  </span>
-                </div>
+                {!isPdfSubmenuOpen ? (
+                  <>
+                    <div className="px-2 py-1 text-[10px] uppercase font-semibold text-neutral-400 tracking-wider flex items-center justify-between">
+                      <span>Save & Export Chat</span>
+                      <span className="text-[10px] text-neutral-500 font-mono">
+                        {activeProjectMessages.length} msg{activeProjectMessages.length === 1 ? '' : 's'}
+                      </span>
+                    </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    handleSaveFullConversation();
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
-                >
-                  <FileText className="w-3.5 h-3.5 text-white shrink-0" />
-                  <div>
-                    <div className="font-medium">Save to Notes</div>
-                    <div className="text-[10px] text-neutral-400">Save full chat with synthesized summary</div>
-                  </div>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        handleSaveFullConversation();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-white shrink-0" />
+                      <div>
+                        <div className="font-medium">Save to Notes</div>
+                        <div className="text-[10px] text-neutral-400">Save full chat with synthesized summary</div>
+                      </div>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    exportConversationToFile('markdown');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                  <div>
-                    <div className="font-medium">Export as Markdown (.md)</div>
-                    <div className="text-[10px] text-neutral-400">Complete formatted dialogue</div>
-                  </div>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        exportConversationToFile('markdown');
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <div>
+                        <div className="font-medium">Export as Markdown (.md)</div>
+                        <div className="text-[10px] text-neutral-400">Complete formatted dialogue</div>
+                      </div>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    exportConversationToFile('text');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                  <div>
-                    <div className="font-medium">Export as Plain Text (.txt)</div>
-                    <div className="text-[10px] text-neutral-400">Simple unformatted transcript</div>
-                  </div>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        exportConversationToFile('text');
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <div>
+                        <div className="font-medium">Export as Plain Text (.txt)</div>
+                        <div className="text-[10px] text-neutral-400">Simple unformatted transcript</div>
+                      </div>
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    exportConversationToFile('json');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                  <div>
-                    <div className="font-medium">Export as JSON (.json)</div>
-                    <div className="text-[10px] text-neutral-400">Raw structured data backup</div>
-                  </div>
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        exportConversationToFile('json');
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <div>
+                        <div className="font-medium">Export as JSON (.json)</div>
+                        <div className="text-[10px] text-neutral-400">Raw structured data backup</div>
+                      </div>
+                    </button>
 
-                <button
-                  id="export-chat-pdf-btn"
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    exportConversationToFile('pdf');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                  <div>
-                    <div className="font-medium">Export as PDF (.pdf)</div>
-                    <div className="text-[10px] text-neutral-400">Printable document transcript</div>
-                  </div>
-                </button>
+                    <button
+                      id="export-chat-pdf-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsPdfSubmenuOpen(true);
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Download className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                        <div>
+                          <div className="font-medium">Export as PDF (.pdf)</div>
+                          <div className="text-[10px] text-neutral-400">Choose Image or Text format</div>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsExtractMenuOpen(false);
-                    const transcript = activeProjectMessages
-                      .map((m) => `${m.sender === 'user' ? 'User' : 'AXON'}: ${m.text}`)
-                      .join('\n\n');
-                    navigator.clipboard.writeText(transcript);
-                    showToast('Copied conversation to clipboard');
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border-t border-neutral-900"
-                >
-                  <Copy className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-                  <div>
-                    <div className="font-medium">Copy Full Transcript</div>
-                    <div className="text-[10px] text-neutral-400">Copy text to clipboard directly</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        const transcript = activeProjectMessages
+                          .map((m) => `${m.sender === 'user' ? 'User' : 'AXON'}: ${m.text}`)
+                          .join('\n\n');
+                        navigator.clipboard.writeText(transcript);
+                        showToast('Copied conversation to clipboard');
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border-t border-neutral-900"
+                    >
+                      <Copy className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+                      <div>
+                        <div className="font-medium">Copy Full Transcript</div>
+                        <div className="text-[10px] text-neutral-400">Copy text to clipboard directly</div>
+                      </div>
+                    </button>
+                  </>
+                ) : (
+                  <div className="p-1 space-y-1.5 animate-in fade-in duration-150">
+                    <div className="flex items-center gap-1.5 pb-2 mb-1 border-b border-neutral-800 text-neutral-300">
+                      <button
+                        type="button"
+                        onClick={() => setIsPdfSubmenuOpen(false)}
+                        className="p-1 rounded-md hover:bg-neutral-850 text-neutral-400 hover:text-white transition-colors"
+                        title="Back to export options"
+                        aria-label="Back"
+                      >
+                        <ArrowLeft className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="font-semibold text-xs text-white">Choose PDF Format</span>
+                    </div>
+
+                    <button
+                      id="export-pdf-image-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        setIsPdfSubmenuOpen(false);
+                        exportConversationToFile('image-pdf', imageExportStageRef.current);
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border border-neutral-800/70 hover:border-neutral-700 bg-neutral-900/30"
+                    >
+                      <div className="p-1.5 rounded-md bg-neutral-800 text-white shrink-0 mt-0.5">
+                        <ImageIcon className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-white text-xs">Image PDF</div>
+                        <div className="text-[10px] text-neutral-400 leading-tight mt-0.5">
+                          Complete visual image capture of the entire conversation from first message to last
+                        </div>
+                      </div>
+                    </button>
+
+                    <button
+                      id="export-pdf-text-btn"
+                      type="button"
+                      onClick={() => {
+                        setIsExtractMenuOpen(false);
+                        setIsPdfSubmenuOpen(false);
+                        exportConversationToFile('pdf');
+                      }}
+                      className="w-full flex items-start gap-2.5 p-2 rounded-lg hover:bg-neutral-900 text-left text-neutral-200 hover:text-white transition-colors border border-neutral-800/70 hover:border-neutral-700 bg-neutral-900/30"
+                    >
+                      <div className="p-1.5 rounded-md bg-neutral-800 text-white shrink-0 mt-0.5">
+                        <FileText className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="font-medium text-white text-xs">Text PDF</div>
+                        <div className="text-[10px] text-neutral-400 leading-tight mt-0.5">
+                          Formatted text transcript exported as a PDF
+                        </div>
+                      </div>
+                    </button>
                   </div>
-                </button>
+                )}
               </div>
             )}
           </div>
@@ -878,6 +946,66 @@ export const ChatPane: React.FC = () => {
         </div>
       </div>
     </div>
+
+      {/* Offscreen Full Conversation Staging Node for Complete Image PDF Capture */}
+      <div
+        ref={imageExportStageRef}
+        id="chat-full-image-export-stage"
+        style={{
+          position: 'fixed',
+          left: '-9999px',
+          top: 0,
+          width: '768px',
+          zIndex: -9999,
+          pointerEvents: 'none',
+        }}
+        className="bg-neutral-950 text-white p-7 space-y-4 font-sans"
+      >
+        <div className="border-b border-neutral-800 pb-4 mb-4 flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-lg text-white">AXON • {activeProject.name}</span>
+            </div>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              {activeProject.description || 'Conversation Archive'}
+            </p>
+          </div>
+          <div className="text-right text-xs text-neutral-500 font-mono">
+            <div>{new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</div>
+            <div>{activeProjectMessages.length} message{activeProjectMessages.length === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+
+        {activeProjectMessages.map((msg) => {
+          const isAxon = msg.sender === 'axon' || (msg as any).role === 'assistant';
+          const messageText = typeof msg.text === 'string'
+            ? msg.text
+            : (msg.text && typeof msg.text === 'object' && 'text' in (msg.text as any)
+                ? String((msg.text as any).text)
+                : JSON.stringify(msg.text || ''));
+
+          return (
+            <div
+              key={`export-stage-${msg.id}`}
+              className={`flex flex-col ${isAxon ? 'items-start' : 'items-end'} mb-3`}
+            >
+              <div
+                className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                  isAxon
+                    ? 'bg-neutral-900 border border-neutral-800 text-neutral-100'
+                    : 'bg-white text-black font-normal'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-4 mb-1 text-[10px] opacity-75 font-semibold">
+                  <span>{isAxon ? 'AXON' : 'User'}</span>
+                  <span className="font-mono text-[9px]">{msg.timestamp || ''}</span>
+                </div>
+                <div className="whitespace-pre-wrap break-words">{messageText}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       {/* Model & Account Switching Modal */}
       <ModelSelectorModal

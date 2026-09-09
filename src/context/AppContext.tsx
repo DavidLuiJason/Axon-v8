@@ -38,7 +38,7 @@ import {
   simulateTrimPlan,
   formatBytes,
 } from '../lib/storageManifest';
-import { exportChatToPdf } from '../lib/pdfExport';
+import { exportChatToPdf, exportChatToImagePdf } from '../lib/pdfExport';
 import {
   tryEvaluateMathExpression,
   handleStorageChatCommand,
@@ -137,7 +137,7 @@ interface AppContextType {
   // Conversation Data Extraction (Part 6)
   extractConversationToNote: (options?: { title?: string; mode?: 'summary' | 'raw'; targetProjectId?: string }) => Promise<NoteItem>;
   extractSingleMessageToNote: (message: ChatMessage, targetProjectId?: string) => NoteItem;
-  exportConversationToFile: (format: 'markdown' | 'text' | 'json' | 'pdf') => void;
+  exportConversationToFile: (format: 'markdown' | 'text' | 'json' | 'pdf' | 'image-pdf', sourceElement?: HTMLElement | null) => Promise<void> | void;
 
   // Settings: Theme & Icons
   theme: ThemeSettings;
@@ -1995,7 +1995,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return createdNote;
   };
 
-  const exportConversationToFile = (format: 'markdown' | 'text' | 'json') => {
+  const exportConversationToFile = async (
+    format: 'markdown' | 'text' | 'json' | 'pdf' | 'image-pdf',
+    sourceElement?: HTMLElement | null
+  ) => {
     const projectMsgs = messages.filter((m) => (m.projectId || 'proj-general') === activeProjectId);
     if (projectMsgs.length === 0) {
       showToast('No messages in active project to export');
@@ -2019,7 +2022,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Exported JSON data file');
     } else if (format === 'pdf') {
       exportChatToPdf(projectMsgs, activeProject.name, activeProject.description);
-      showToast('Exported PDF transcript');
+      showToast('Exported Text PDF transcript');
+    } else if (format === 'image-pdf') {
+      showToast('Generating Image PDF...');
+      try {
+        await exportChatToImagePdf(projectMsgs, activeProject.name, activeProject.description, sourceElement);
+        showToast('Exported Image PDF');
+      } catch (err) {
+        console.error('Failed to export image PDF:', err);
+        showToast('Failed to generate Image PDF');
+      }
     }
   };
 

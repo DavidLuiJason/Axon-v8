@@ -43,6 +43,13 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({ isOpen, 
       ? availableModels
       : availableModels.filter((m) => m.provider === selectedProviderTab);
 
+  // Ensure AXON Local Core is guaranteed the first (topmost) model in the list
+  const sortedFilteredModels = [...filteredModels].sort((a, b) => {
+    if (a.id === 'axon-offline-core') return -1;
+    if (b.id === 'axon-offline-core') return 1;
+    return 0;
+  });
+
   const providerAccounts = aiAccounts.filter((a) => a.provider === currentModel.provider);
 
   const handleSelectModel = (modelId: string) => {
@@ -60,11 +67,12 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({ isOpen, 
   return (
     <div
       id="model-selector-modal"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-0 sm:p-4 animate-in fade-in duration-150 select-none"
+      data-no-swipe="true"
+      className="absolute inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 select-none overflow-hidden max-w-full"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-t-3xl sm:rounded-2xl p-5 shadow-2xl space-y-4 max-h-[85vh] flex flex-col"
+        className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-4 sm:p-5 shadow-2xl space-y-4 max-h-[90%] sm:max-h-[85vh] flex flex-col mx-auto overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -80,6 +88,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({ isOpen, 
             type="button"
             onClick={onClose}
             className="p-1 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+            title="Close Model Engine"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
@@ -89,7 +99,8 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({ isOpen, 
         <div className="flex items-center gap-1.5 p-1 bg-neutral-950 rounded-xl border border-neutral-800 shrink-0">
           {(
             [
-              { id: 'all', label: 'All Models' },
+              { id: 'all', label: 'All' },
+              { id: 'axon', label: 'AXON' },
               { id: 'gemini', label: 'Gemini' },
               { id: 'claude', label: 'Claude' },
               { id: 'chatgpt', label: 'ChatGPT' },
@@ -118,7 +129,7 @@ export const ModelSelectorModal: React.FC<ModelSelectorModalProps> = ({ isOpen, 
             </p>
 
             <div className="space-y-1.5">
-              {filteredModels.map((model) => {
+              {sortedFilteredModels.map((model) => {
                 const isSelected = model.id === activeModelId;
                 const activeAccountForModel = aiAccounts.find(
                   (a) => a.provider === model.provider && a.isActive

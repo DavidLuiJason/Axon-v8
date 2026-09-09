@@ -53,6 +53,7 @@ export async function bootAxonSession() {
   return (
     <div
       id="workspace-pane"
+      style={{ touchAction: 'pan-y' }}
       className="flex flex-col h-full min-h-0 w-full bg-neutral-950 text-white select-text border-l border-neutral-900 overflow-hidden"
     >
       {/* Workspace Sub-header */}

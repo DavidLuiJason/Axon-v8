@@ -25,6 +25,16 @@ export const DualPaneContainer: React.FC = () => {
   // Exclude interactive elements from triggering swipe navigation
   const isIgnoredTarget = (target: HTMLElement | null): boolean => {
     if (!target) return false;
+
+    // Full-surface swipe navigation: from anywhere on the code/workspace interface,
+    // swiping in the return direction back to chat works across the entire surface.
+    if (
+      paneViewState === 'workspace-only' ||
+      Boolean(target.closest('#dual-pane-right, #workspace-pane'))
+    ) {
+      return false;
+    }
+
     return Boolean(
       target.closest(
         'input, textarea, select, button, [contenteditable="true"], .no-swipe-gesture, #chat-input-bar, #chat-bottom-dock, #chat-bottom-shortcut-bar, #edit-shortcuts-modal, [data-no-swipe], pre, code'
